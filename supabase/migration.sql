@@ -134,6 +134,12 @@ begin
   -- zawsze odswiezamy znacznik czasu
   new.updated_at := now();
 
+  -- Kontekst serwisowy (service_role / seed / konserwacja / n8n) omija straznika.
+  -- Taki kontekst i tak omija RLS, a auth.uid() jest wtedy null.
+  if auth.uid() is null then
+    return new;
+  end if;
+
   -- worker nie moze ruszac pol planistycznych (admin: tak)
   if r is distinct from 'admin' then
     if new.brief        is distinct from old.brief
