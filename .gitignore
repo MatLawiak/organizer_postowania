@@ -1,0 +1,22 @@
+node_modules
+dist
+dist-ssr
+*.local
+.env
+.env.local
+.env.*.local
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+*.log
+npm-debug.log*
+
+# Artefakty tsc -b
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+
+# Pliki briefu/brandu — nie wrzucamy do repo aplikacji
+SPECYFIKACJA-planner-twistedpixel.md
+mockup-planner-twistedpixel.html
+identyfikacja wizualna Twisted Pixel/
