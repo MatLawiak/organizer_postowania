@@ -43,23 +43,28 @@ Narzędzie **nie publikuje** automatycznie — to planner + system akceptacji.
    ```
    Trigger `handle_new_user` automatycznie tworzy wpis w `profiles` (domyślnie `worker`).
 
-## Model danych
+## Model danych (schemat v1.2)
 
 - `profiles` — rozszerzenie `auth.users` (display_name, role: admin/worker)
 - `clients` — klienci = dashboardy (name, color, platforms[], dark_text, position)
 - `posts` — posty (data, platformy, format, tytuł, brief, treść, wariant LI, link grafiki, status)
 - `post_comments` — historia uwag do poprawek
+- `recurring_tasks` — zadania cykliczne (np. „Relacja co środa"); własność po `created_by`
+- `client_rules` — zasady prowadzenia klienta (lista punktów); własność po `created_by`
 
-## Workflow statusów (egzekwowany w bazie)
+## Workflow statusów — 4 statusy (egzekwowany w bazie)
 
 ```
-Zaplanowany ──(worker)──► W przygotowaniu ──(worker)──► Do akceptacji
-Do akceptacji ──(admin: Akceptuj)──► Zaakceptowany ──(worker)──► Opublikowany
-Do akceptacji ──(admin: Do poprawy + komentarz)──► Do poprawy ──(worker)──► Do akceptacji
+Zaplanowany   ──(worker: „Wyślij do akceptacji")──► Do akceptacji
+Do akceptacji ──(admin: „Akceptuj")─────────────────► Zaakceptowany
+Do akceptacji ──(admin: „Do poprawy" + komentarz)──► Zaplanowany   (UI pokazuje „Do poprawek")
+Zaakceptowany ──(worker: „Oznacz: Opublikowany")───► Opublikowany
 ```
 
-Dozwolone przejścia i uprawnienia ról pilnuje trigger `posts_guard` + RLS — UI tylko je odzwierciedla.
-„Do poprawy" wymaga komentarza (RPC `reject_post` wstawia komentarz i zmienia status atomowo).
+Odrzucenie nie tworzy osobnego statusu — post wraca do `Zaplanowany` z wymaganym komentarzem;
+post w `Zaplanowany` z ≥1 komentarzem jest prezentowany jako **„Do poprawek"** (stan pochodny, nie kolumna).
+Dozwolone przejścia i uprawnienia ról pilnuje trigger `posts_guard` + RLS. RPC `reject_post` wstawia
+komentarz i cofa status atomowo. Usuwanie zasad/zadań cyklicznych: admin dowolne, worker tylko własne.
 
 ## Uprawnienia (RLS = źródło prawdy)
 

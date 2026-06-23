@@ -1,12 +1,8 @@
 export type Role = 'admin' | 'worker'
 
-export type PostStatus =
-  | 'Zaplanowany'
-  | 'W przygotowaniu'
-  | 'Do akceptacji'
-  | 'Do poprawy'
-  | 'Zaakceptowany'
-  | 'Opublikowany'
+// v1.2 — dokladnie 4 statusy. "Do poprawek" to stan POCHODNY (Zaplanowany + komentarz),
+// nie wartosc w bazie.
+export type PostStatus = 'Zaplanowany' | 'Do akceptacji' | 'Zaakceptowany' | 'Opublikowany'
 
 export type PostFormat = 'Post' | 'Rolka' | 'Karuzela' | 'Story'
 
@@ -54,6 +50,26 @@ export interface Post {
   created_at: string
   updated_at: string
   post_comments?: PostComment[]
+}
+
+export interface RecurringTask {
+  id: string
+  client_id: string | null // null = ogolne (dla wszystkich)
+  label: string
+  description: string | null
+  weekday: number // 0=poniedzialek ... 6=niedziela
+  frequency: 'weekly'
+  created_by: string | null
+  created_at: string
+}
+
+export interface ClientRule {
+  id: string
+  client_id: string
+  body: string
+  position: number
+  created_by: string | null
+  created_at: string
 }
 
 export interface NewPostInput {

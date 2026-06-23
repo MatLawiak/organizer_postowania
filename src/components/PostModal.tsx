@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { usePlanner } from '../data/PlannerContext'
-import { Dia, fmtDateFull, fmtWhen, linkify } from '../lib/helpers'
-import { STATUSES, PLAT_LABEL } from '../lib/constants'
+import { Dia, fmtDateFull, fmtWhen, linkify, displayStatus } from '../lib/helpers'
+import { PLAT_LABEL } from '../lib/constants'
+import { TermBadge } from './TermBadge'
+import { ConfirmDialog } from './ConfirmDialog'
 import type { Post, PostStatus } from '../lib/types'
 
 export function PostModal({ post, onClose }: { post: Post; onClose: () => void }) {
   const { isAdmin } = useAuth()
-  const { clients, changeStatus, updatePostFields, rejectPost } = usePlanner()
+  const { clients, changeStatus, updatePostFields, rejectPost, deletePost } = usePlanner()
   const client = clients.find((c) => c.id === post.client_id)
 
   const [brief, setBrief] = useState(post.brief ?? '')
@@ -19,32 +21,26 @@ export function PostModal({ post, onClose }: { post: Post; onClose: () => void }
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  const [confirmDel, setConfirmDel] = useState(false)
 
-  // Reset stanu przy zmianie posta
   useEffect(() => {
     setBrief(post.brief ?? '')
     setContent(post.content ?? '')
     setContentLi(post.content_linkedin ?? '')
     setGraphic(post.graphic_url ?? '')
-    setShowFix(false)
-    setFixText('')
-    setErr(null)
-    setSaved(false)
+    setShowFix(false); setFixText(''); setErr(null); setSaved(false)
   }, [post.id, post.brief, post.content, post.content_linkedin, post.graphic_url])
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
 
   if (!client) return null
-  const s = STATUSES[post.status]
+  const ds = displayStatus(post)
   const hasLi = post.platforms.includes('LI') && post.platforms.length > 1
 
-  // Co jest brudne (zalezne od roli)
   const dirty = isAdmin
     ? brief !== (post.brief ?? '')
     : content !== (post.content ?? '') ||
@@ -52,8 +48,7 @@ export function PostModal({ post, onClose }: { post: Post; onClose: () => void }
       graphic !== (post.graphic_url ?? '')
 
   async function run(fn: () => Promise<string | null>) {
-    setBusy(true)
-    setErr(null)
+    setBusy(true); setErr(null)
     const e = await fn()
     setBusy(false)
     if (e) setErr(e)
@@ -65,10 +60,7 @@ export function PostModal({ post, onClose }: { post: Post; onClose: () => void }
       ? { brief: brief || null }
       : { content: content || null, content_linkedin: contentLi || null, graphic_url: graphic || null }
     const e = await run(() => updatePostFields(post.id, partial))
-    if (!e) {
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2500)
-    }
+    if (!e) { setSaved(true); setTimeout(() => setSaved(false), 2500) }
   }
 
   async function transition(status: PostStatus) {
@@ -79,10 +71,7 @@ export function PostModal({ post, onClose }: { post: Post; onClose: () => void }
     const t = fixText.trim()
     if (!t) return
     const e = await run(() => rejectPost(post.id, t))
-    if (!e) {
-      setShowFix(false)
-      setFixText('')
-    }
+    if (!e) { setShowFix(false); setFixText('') }
   }
 
   return (
@@ -91,13 +80,9 @@ export function PostModal({ post, onClose }: { post: Post; onClose: () => void }
         <div className="modal-head">
           <div>
             <h3>{post.title}</h3>
-            <div className="sub">
-              {client.name} · {fmtDateFull(post.publish_date)}
-            </div>
+            <div className="sub">{client.name} · {fmtDateFull(post.publish_date)}</div>
           </div>
-          <button className="x" onClick={onClose} aria-label="Zamknij">
-            ✕
-          </button>
+          <button className="x" onClick={onClose} aria-label="Zamknij">✕</button>
         </div>
 
         <div className="modal-body">
@@ -107,55 +92,34 @@ export function PostModal({ post, onClose }: { post: Post; onClose: () => void }
               <span>·</span>
               <span>{post.format}</span>
               <span>·</span>
-              <span className={`status${s.attn ? ' attn' : ''}`}>
-                <Dia color={s.color} size={7} />
-                {post.status}
+              <span className={`status${ds.attn ? ' attn' : ''}`}>
+                <Dia color={ds.color} size={7} />{ds.label}
               </span>
+              <TermBadge post={post} />
             </div>
           </div>
 
           <div className="sec">
             <div className="sec-label">Brief / wytyczne</div>
             {isAdmin ? (
-              <textarea
-                className="field"
-                rows={3}
-                value={brief}
-                onChange={(e) => setBrief(e.target.value)}
-                placeholder="Wytyczne dla pracownika — możesz wkleić linki do materiałów…"
-              />
+              <textarea className="field" rows={3} value={brief} onChange={(e) => setBrief(e.target.value)}
+                placeholder="Wytyczne dla pracownika — możesz wkleić linki do materiałów…" />
             ) : (
-              <div className="plain">
-                {post.brief ? linkify(post.brief) : <span className="muted">Brak briefu.</span>}
-              </div>
+              <div className="plain">{post.brief ? linkify(post.brief) : <span className="muted">Brak briefu.</span>}</div>
             )}
           </div>
 
           <div className="sec">
             <div className="sec-label">Treść posta{hasLi ? ' — Meta (IG / FB)' : ''}</div>
-            <textarea
-              className="field"
-              rows={4}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="Gotowa treść posta…"
-              readOnly={isAdmin}
-            />
+            <textarea className="field" rows={4} value={content} onChange={(e) => setContent(e.target.value)}
+              placeholder="Gotowa treść posta…" readOnly={isAdmin} />
           </div>
 
           {hasLi && (
             <div className="sec">
-              <div className="sec-label">
-                Wariant LinkedIn <span className="opt-hint">— opcjonalny</span>
-              </div>
-              <textarea
-                className="field"
-                rows={3}
-                value={contentLi}
-                onChange={(e) => setContentLi(e.target.value)}
-                placeholder="Wypełnij tylko, jeśli wersja LinkedIn ma się różnić od Mety"
-                readOnly={isAdmin}
-              />
+              <div className="sec-label">Wariant LinkedIn <span className="opt-hint">— opcjonalny</span></div>
+              <textarea className="field" rows={3} value={contentLi} onChange={(e) => setContentLi(e.target.value)}
+                placeholder="Wypełnij tylko, jeśli wersja LinkedIn ma się różnić od Mety" readOnly={isAdmin} />
             </div>
           )}
 
@@ -163,41 +127,29 @@ export function PostModal({ post, onClose }: { post: Post; onClose: () => void }
             <div className="sec-label">Grafika / materiał</div>
             {isAdmin ? (
               post.graphic_url ? (
-                <div className="plain">
-                  <a href={post.graphic_url} target="_blank" rel="noreferrer noopener">
-                    {post.graphic_url}
-                  </a>
-                </div>
+                <div className="plain"><a href={post.graphic_url} target="_blank" rel="noreferrer noopener">{post.graphic_url}</a></div>
               ) : (
                 <div className="plain muted">brak — pracownik doda link</div>
               )
             ) : (
-              <input
-                className="field"
-                value={graphic}
-                onChange={(e) => setGraphic(e.target.value)}
-                placeholder="Link do Canvy / Drive"
-              />
+              <input className="field" value={graphic} onChange={(e) => setGraphic(e.target.value)} placeholder="Link do Canvy / Drive" />
             )}
           </div>
 
           {post.post_comments && post.post_comments.length > 0 && (
             <div className="sec">
               <div className="sec-label">Uwagi do poprawy</div>
-              {[...post.post_comments]
-                .sort((a, b) => (a.created_at < b.created_at ? -1 : 1))
-                .map((cm) => (
-                  <div className="comment" key={cm.id}>
-                    <b>{cm.author?.display_name ?? 'Admin'}:</b> {cm.body}
-                    <span className="when">{fmtWhen(cm.created_at)}</span>
-                  </div>
-                ))}
+              {[...post.post_comments].sort((a, b) => (a.created_at < b.created_at ? -1 : 1)).map((cm) => (
+                <div className="comment" key={cm.id}>
+                  <b>{cm.author?.display_name ?? 'Admin'}:</b> {cm.body}
+                  <span className="when">{fmtWhen(cm.created_at)}</span>
+                </div>
+              ))}
             </div>
           )}
         </div>
 
         <div className="modal-actions">
-          {/* Zapis edytowalnych pol */}
           {dirty && (
             <button className="btn btn-primary" onClick={save} disabled={busy}>
               {busy ? 'Zapisywanie…' : 'Zapisz zmiany'}
@@ -205,51 +157,46 @@ export function PostModal({ post, onClose }: { post: Post; onClose: () => void }
           )}
           {saved && !dirty && <span className="saved-hint">Zapisano ✓</span>}
 
-          {/* Akcje workflow */}
-          <Actions
-            post={post}
-            isAdmin={isAdmin}
-            busy={busy}
-            showFix={showFix}
-            onShowFix={() => setShowFix(true)}
-            onTransition={transition}
-          />
+          <Actions post={post} isAdmin={isAdmin} busy={busy} showFix={showFix}
+            onShowFix={() => setShowFix(true)} onTransition={transition} />
 
-          {err && <span className="err" style={{ marginBottom: 0 }}>{err}</span>}
+          {isAdmin && (
+            <button className="linkbtn danger del-post" onClick={() => setConfirmDel(true)}>Usuń post</button>
+          )}
 
-          {/* Pole uwag (Do poprawy) */}
+          {err && <span className="err" style={{ marginBottom: 0, marginLeft: 0 }}>{err}</span>}
+
           {showFix && (
             <div className="fix-area">
-              <input
-                className="field"
-                value={fixText}
-                onChange={(e) => setFixText(e.target.value)}
-                placeholder="Co poprawić? (wymagane)"
-                autoFocus
-              />
-              <button
-                className="btn btn-primary"
-                style={{ marginTop: 10 }}
-                onClick={sendFix}
-                disabled={busy || !fixText.trim()}
-              >
+              <input className="field" value={fixText} onChange={(e) => setFixText(e.target.value)}
+                placeholder="Co poprawić? (wymagane — post wróci do „Do poprawek”)" autoFocus />
+              <button className="btn btn-primary" style={{ marginTop: 10 }} onClick={sendFix} disabled={busy || !fixText.trim()}>
                 Wyślij uwagi
               </button>
             </div>
           )}
         </div>
       </div>
+
+      {confirmDel && (
+        <ConfirmDialog
+          title="Usunąć post?"
+          message={`Post „${post.title}" zostanie trwale usunięty.`}
+          confirmLabel="Usuń post"
+          onConfirm={async () => {
+            const e = await deletePost(post.id)
+            if (!e) onClose()
+            return e
+          }}
+          onCancel={() => setConfirmDel(false)}
+        />
+      )}
     </div>
   )
 }
 
 function Actions({
-  post,
-  isAdmin,
-  busy,
-  showFix,
-  onShowFix,
-  onTransition,
+  post, isAdmin, busy, showFix, onShowFix, onTransition,
 }: {
   post: Post
   isAdmin: boolean
@@ -262,48 +209,19 @@ function Actions({
     if (post.status === 'Do akceptacji') {
       return (
         <>
-          <button className="btn btn-mint" disabled={busy} onClick={() => onTransition('Zaakceptowany')}>
-            Akceptuj
-          </button>
-          {!showFix && (
-            <button className="btn btn-line" disabled={busy} onClick={onShowFix}>
-              Do poprawy
-            </button>
-          )}
+          <button className="btn btn-mint" disabled={busy} onClick={() => onTransition('Zaakceptowany')}>Akceptuj</button>
+          {!showFix && <button className="btn btn-line" disabled={busy} onClick={onShowFix}>Do poprawy</button>}
         </>
       )
     }
-    return (
-      <span className="note" style={{ marginLeft: 0 }}>
-        Akcje pojawią się przy statusie „Do akceptacji”.
-      </span>
-    )
+    return <span className="note" style={{ marginLeft: 0 }}>Akcje pojawią się przy statusie „Do akceptacji”.</span>
   }
   // worker
   if (post.status === 'Zaplanowany') {
-    return (
-      <button className="btn btn-primary" disabled={busy} onClick={() => onTransition('W przygotowaniu')}>
-        Zacznij pracę
-      </button>
-    )
-  }
-  if (post.status === 'W przygotowaniu' || post.status === 'Do poprawy') {
-    return (
-      <button className="btn btn-primary" disabled={busy} onClick={() => onTransition('Do akceptacji')}>
-        Wyślij do akceptacji
-      </button>
-    )
+    return <button className="btn btn-primary" disabled={busy} onClick={() => onTransition('Do akceptacji')}>Wyślij do akceptacji</button>
   }
   if (post.status === 'Zaakceptowany') {
-    return (
-      <button className="btn btn-mint" disabled={busy} onClick={() => onTransition('Opublikowany')}>
-        Oznacz: Opublikowany
-      </button>
-    )
+    return <button className="btn btn-mint" disabled={busy} onClick={() => onTransition('Opublikowany')}>Oznacz: Opublikowany</button>
   }
-  return (
-    <span className="note" style={{ marginLeft: 0 }}>
-      Brak akcji.
-    </span>
-  )
+  return <span className="note" style={{ marginLeft: 0 }}>Brak akcji.</span>
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { usePlanner } from '../data/PlannerContext'
 import { Dia } from '../lib/helpers'
+import { QueueView } from '../views/QueueView'
 import { CalendarView } from '../views/CalendarView'
 import { ClientView } from '../views/ClientView'
 import { PostModal } from './PostModal'
@@ -13,18 +14,16 @@ export function AppShell() {
   const { profile, isAdmin, signOut } = useAuth()
   const { clients, posts, loading, error } = usePlanner()
 
-  // 'cal' = kalendarz, w przeciwnym razie id klienta
-  const [activeTab, setActiveTab] = useState<string>('cal')
+  // 'queue' = Do publikacji (domyslny), 'cal' = Kalendarz, inaczej id klienta
+  const [activeTab, setActiveTab] = useState<string>('queue')
   const [openPostId, setOpenPostId] = useState<string | null>(null)
-  // formularz nowego posta: { client } gdzie client to preselekcja ('' = wybór w formularzu) lub null = zamkniety
   const [newPostFor, setNewPostFor] = useState<string | null | undefined>(undefined)
   const [clientFormOpen, setClientFormOpen] = useState(false)
   const [tip, setTip] = useState<TipState | null>(null)
 
-  // Jesli aktywna zakladka klienta zniknela (np. usuniety) — wroc do kalendarza
   useEffect(() => {
-    if (activeTab !== 'cal' && !clients.some((c) => c.id === activeTab)) {
-      setActiveTab('cal')
+    if (activeTab !== 'queue' && activeTab !== 'cal' && !clients.some((c) => c.id === activeTab)) {
+      setActiveTab('queue')
     }
   }, [clients, activeTab])
 
@@ -33,25 +32,31 @@ export function AppShell() {
     window.scrollTo(0, 0)
   }
 
-  // Otwarcie posta z kalendarza — przejscie do zakladki klienta + modal
-  const goPost = (postId: string) => {
-    const p = posts.find((x) => x.id === postId)
-    if (p) setActiveTab(p.client_id)
+  // Otwarcie posta — opcjonalnie przejscie do zakladki klienta (z kalendarza)
+  const openPost = (postId: string, switchToClient = false) => {
+    if (switchToClient) {
+      const p = posts.find((x) => x.id === postId)
+      if (p) setActiveTab(p.client_id)
+    }
     setOpenPostId(postId)
     setTip(null)
   }
 
-  const waitingCount = useMemo(() => {
+  // Licznik "do zrobienia" dla roli: admin = Do akceptacji; worker = Do poprawek + Zaakceptowany
+  const badge = useMemo(() => {
     const map: Record<string, number> = {}
     for (const p of posts) {
-      const key = isAdmin ? 'Do akceptacji' : 'Do poprawy'
-      if (p.status === key) map[p.client_id] = (map[p.client_id] ?? 0) + 1
+      const isDoPoprawek = p.status === 'Zaplanowany' && (p.post_comments?.length ?? 0) > 0
+      const hit = isAdmin
+        ? p.status === 'Do akceptacji'
+        : isDoPoprawek || p.status === 'Zaakceptowany'
+      if (hit) map[p.client_id] = (map[p.client_id] ?? 0) + 1
     }
     return map
   }, [posts, isAdmin])
 
   const activeClient = clients.find((c) => c.id === activeTab) ?? null
-  const openPost = openPostId ? posts.find((p) => p.id === openPostId) ?? null : null
+  const openPostObj = openPostId ? posts.find((p) => p.id === openPostId) ?? null : null
 
   return (
     <>
@@ -64,18 +69,19 @@ export function AppShell() {
             {profile?.display_name}
             <span className="role">{isAdmin ? 'Admin' : 'Pracownik'}</span>
           </span>
-          <button className="linkbtn" onClick={() => signOut()}>
-            Wyloguj
-          </button>
+          <button className="linkbtn" onClick={() => signOut()}>Wyloguj</button>
         </div>
       </div>
 
       <div className="tabs">
+        <button className={`tab ${activeTab === 'queue' ? 'active' : ''}`} onClick={() => go('queue')}>
+          Do publikacji
+        </button>
         <button className={`tab ${activeTab === 'cal' ? 'active' : ''}`} onClick={() => go('cal')}>
           Kalendarz
         </button>
         {clients.map((c) => {
-          const w = waitingCount[c.id] ?? 0
+          const w = badge[c.id] ?? 0
           return (
             <button
               key={c.id}
@@ -89,9 +95,7 @@ export function AppShell() {
           )
         })}
         {isAdmin && (
-          <button className="tab add" onClick={() => setClientFormOpen(true)} title="Dodaj klienta">
-            +
-          </button>
+          <button className="tab add" onClick={() => setClientFormOpen(true)} title="Dodaj klienta">+</button>
         )}
       </div>
 
@@ -99,24 +103,27 @@ export function AppShell() {
         {error && <div className="err">Błąd: {error}</div>}
         {loading ? (
           <div className="muted">Ładowanie danych…</div>
+        ) : activeTab === 'queue' ? (
+          <QueueView onOpenPost={(id) => openPost(id)} />
         ) : activeTab === 'cal' ? (
           <CalendarView
-            onOpenPost={goPost}
+            onOpenPost={(id) => openPost(id, true)}
             onNewPost={() => setNewPostFor('')}
             onTip={setTip}
           />
         ) : activeClient ? (
           <ClientView
             client={activeClient}
-            onOpenPost={(id) => setOpenPostId(id)}
+            onOpenPost={(id) => openPost(id)}
             onNewPost={() => setNewPostFor(activeClient.id)}
+            onDeleted={() => go('queue')}
           />
         ) : null}
       </div>
 
       <Tooltip tip={tip} />
 
-      {openPost && <PostModal post={openPost} onClose={() => setOpenPostId(null)} />}
+      {openPostObj && <PostModal post={openPostObj} onClose={() => setOpenPostId(null)} />}
 
       {newPostFor !== undefined && (
         <NewPostForm presetClientId={newPostFor || ''} onClose={() => setNewPostFor(undefined)} />

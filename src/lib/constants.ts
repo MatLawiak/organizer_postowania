@@ -1,20 +1,19 @@
 import type { PostStatus, Platform, PostFormat } from './types'
 
-// Kolory rombow statusow — wg sekcji 7.3 specyfikacji.
+// Kolory rombow statusow — wg sekcji 7.3 specyfikacji v1.2 (4 statusy).
 export const STATUSES: Record<PostStatus, { color: string; attn?: boolean }> = {
-  'Zaplanowany':     { color: '#5d6970' },
-  'W przygotowaniu': { color: '#f6b090' },
-  'Do akceptacji':   { color: '#eb5d1c', attn: true },
-  'Do poprawy':      { color: '#f9e064', attn: true },
-  'Zaakceptowany':   { color: '#209b84' },
-  'Opublikowany':    { color: '#c1c8cd' },
+  'Zaplanowany':   { color: '#5d6970' },
+  'Do akceptacji': { color: '#eb5d1c', attn: true },
+  'Zaakceptowany': { color: '#209b84', attn: true }, // gotowe do publikacji — czeka na workera
+  'Opublikowany':  { color: '#c1c8cd' },
 }
+
+// Stan pochodny: Zaplanowany + komentarz => "Do poprawek" (pomaranczowy).
+export const DO_POPRAWEK = { label: 'Do poprawek', color: '#eb5d1c' }
 
 export const STATUS_ORDER: PostStatus[] = [
   'Zaplanowany',
-  'W przygotowaniu',
   'Do akceptacji',
-  'Do poprawy',
   'Zaakceptowany',
   'Opublikowany',
 ]
@@ -32,7 +31,14 @@ export const MONTHS_PL = [
   'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień',
 ]
 
+// 0 = poniedzialek ... 6 = niedziela
 export const WEEKDAYS_PL = ['Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob', 'Nd']
+export const WEEKDAYS_PL_FULL = [
+  'poniedziałek', 'wtorek', 'środa', 'czwartek', 'piątek', 'sobota', 'niedziela',
+]
+// "co poniedziałek / co wtorek / co środę ..." — forma po "co"
+export const WEEKDAYS_PL_CO = [
+  'poniedziałek', 'wtorek', 'środę', 'czwartek', 'piątek', 'sobotę', 'niedzielę',
+]
 
-// Czy ciemny numer dnia jest czytelny na tle koloru klienta (jasne tla -> ciemny numer)
 export const META_PLATFORMS: Platform[] = ['IG', 'FB']
