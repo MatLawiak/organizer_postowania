@@ -1,12 +1,12 @@
 export type Role = 'admin' | 'worker'
 
-// v1.2 — dokladnie 4 statusy. "Do poprawek" to stan POCHODNY (Zaplanowany + komentarz),
-// nie wartosc w bazie.
 export type PostStatus = 'Zaplanowany' | 'Do akceptacji' | 'Zaakceptowany' | 'Opublikowany'
 
 export type PostFormat = 'Post' | 'Rolka' | 'Karuzela' | 'Story'
 
 export type Platform = 'IG' | 'FB' | 'LI'
+
+export type Frequency = 'weekly' | 'biweekly' | 'monthly' | 'days'
 
 export interface Profile {
   id: string
@@ -20,8 +20,10 @@ export interface Client {
   color: string
   platforms: Platform[]
   dark_text: boolean
+  note: string | null
   archived: boolean
   position: number
+  created_by: string | null
 }
 
 export interface PostComment {
@@ -46,19 +48,28 @@ export interface Post {
   content_linkedin: string | null
   graphic_url: string | null
   status: PostStatus
+  recur_id: string | null
+  recur_date: string | null
   created_by: string | null
   created_at: string
   updated_at: string
   post_comments?: PostComment[]
+  // pola syntetyczne (wirtualne wystapienie serii — nie ma jeszcze rekordu w bazie)
+  _virtual?: boolean
 }
 
-export interface RecurringTask {
+export interface Series {
   id: string
-  client_id: string | null // null = ogolne (dla wszystkich)
-  label: string
-  description: string | null
-  weekday: number // 0=poniedzialek ... 6=niedziela
-  frequency: 'weekly'
+  client_id: string
+  title: string
+  format: PostFormat
+  platforms: Platform[]
+  brief: string | null
+  frequency: Frequency
+  interval_days: number
+  start_date: string
+  end_date: string | null
+  skip_dates: string[]
   created_by: string | null
   created_at: string
 }
@@ -80,4 +91,16 @@ export interface NewPostInput {
   title: string
   brief: string
   graphic_url: string
+}
+
+export interface NewSeriesInput {
+  client_id: string
+  title: string
+  format: PostFormat
+  platforms: Platform[]
+  brief: string
+  frequency: Frequency
+  interval_days: number
+  start_date: string
+  end_date: string | null
 }

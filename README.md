@@ -43,28 +43,38 @@ Narzędzie **nie publikuje** automatycznie — to planner + system akceptacji.
    ```
    Trigger `handle_new_user` automatycznie tworzy wpis w `profiles` (domyślnie `worker`).
 
-## Model danych (schemat v1.2)
+## Model danych (schemat v1.4)
 
 - `profiles` — rozszerzenie `auth.users` (display_name, role: admin/worker)
-- `clients` — klienci = dashboardy (name, color, platforms[], dark_text, position)
-- `posts` — posty (data, platformy, format, tytuł, brief, treść, wariant LI, link grafiki, status)
+- `clients` — klienci = dashboardy (name, color, platforms[], dark_text, **note**, **created_by**)
+- `posts` — posty (data, platformy, format, tytuł, brief, treść, wariant LI, link grafiki, status, **recur_id/recur_date**)
 - `post_comments` — historia uwag do poprawek
-- `recurring_tasks` — zadania cykliczne (np. „Relacja co środa"); własność po `created_by`
+- `series` — serie cykliczne (frequency: weekly/biweekly/monthly/days, interval_days, start/end, skip_dates)
 - `client_rules` — zasady prowadzenia klienta (lista punktów); własność po `created_by`
 
-## Workflow statusów — 4 statusy (egzekwowany w bazie)
+Wystąpienia serii generowane są **wirtualnie** w aplikacji (horyzont: bieżący miesiąc + 3 / 12 wstecz);
+realny rekord `posts` powstaje dopiero przy uzupełnieniu treści lub publikacji wystąpienia (materializacja „na dotyk").
+
+## Role (v1.4) i workflow — 4 statusy (egzekwowane w bazie)
+
+Obie role tworzą/edytują posty i klientów oraz **publikują dowolny post**. Tylko admin akceptuje / odsyła do poprawy.
+Usuwanie wg własności (worker tylko swoje i niezaakceptowane).
 
 ```
-Zaplanowany   ──(worker: „Wyślij do akceptacji")──► Do akceptacji
-Do akceptacji ──(admin: „Akceptuj")─────────────────► Zaakceptowany
-Do akceptacji ──(admin: „Do poprawy" + komentarz)──► Zaplanowany   (UI pokazuje „Do poprawek")
-Zaakceptowany ──(worker: „Oznacz: Opublikowany")───► Opublikowany
+Zaplanowany   ──(obie role: „Wyślij do akceptacji")──► Do akceptacji
+Do akceptacji ──(admin: „Akceptuj")──────────────────► Zaakceptowany
+Do akceptacji ──(admin: „Do poprawy" + komentarz)────► Zaplanowany   (UI: „Do poprawek")
+dowolny       ──(obie role: „Oznacz: Opublikowany")──► Opublikowany
 ```
 
-Odrzucenie nie tworzy osobnego statusu — post wraca do `Zaplanowany` z wymaganym komentarzem;
-post w `Zaplanowany` z ≥1 komentarzem jest prezentowany jako **„Do poprawek"** (stan pochodny, nie kolumna).
-Dozwolone przejścia i uprawnienia ról pilnuje trigger `posts_guard` + RLS. RPC `reject_post` wstawia
-komentarz i cofa status atomowo. Usuwanie zasad/zadań cyklicznych: admin dowolne, worker tylko własne.
+Post w `Zaplanowany` z ≥1 komentarzem to **„Do poprawek"** (stan pochodny). Wystąpienia serii (♻)
+nie przechodzą akceptacji. Przejścia i uprawnienia pilnuje trigger `posts_guard` + RLS; `reject_post` (RPC)
+atomowo wstawia komentarz i cofa status.
+
+## Widoki
+
+Zaplanowane (kolejka, domyślny) · Do poprawy · Kalendarz (miesiąc/tydzień, drag&drop, filtr, Dziś) ·
+Statystyki (KPI, m/m, przekroje, eksport CSV) · dashboardy klientów · powiadomienia (dzwonek, role-aware).
 
 ## Uprawnienia (RLS = źródło prawdy)
 
